@@ -3,6 +3,7 @@
 Run: python tests/test_workflow_builders.py
 """
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -17,6 +18,7 @@ from workflow_builders import (
     augmented_classic, augmented_sdp, augmented_dbt,
     augmented_staging,
     augmented_fabric, augmented_fabric_spark,
+    _workflow_common,
 )
 
 
@@ -632,6 +634,62 @@ def test_fabric_spark_vs_nee_differ_only_by_toggle():
     assert loop["enable_nee"] == "{{job.parameters.enable_nee}}"
     print("  fabric_spark / fabric_nee: identical except enable_nee")
 
+
+# Every notebook that parses CustomerMgmt.xml (Cluster/DBSQL single-batch + incremental, SDP, mavenlib for DIGen SF>100).
+CUSTOMERMGMT_LOADERS = [
+    "src/single_batch/SQL/CustomerMgmtRaw.sql",
+    "src/single_batch/spark_declarative_pipelines/CustomerMgmtRaw.sql",
+    "src/incremental_batches/bronze/CustomerMgmtRaw.sql",
+    "src/incremental_batches/bronze/CustomerMgmtRaw_mavenlib.sql",
+]
+
+
+def test_customermgmt_xml_schema():
+    """CUSTOMERMGMT_XML_SCHEMA is the only copy: every loader reads ${customermgmt_xml_schema},
+    every builder path that runs a loader passes it, and its leaves are all STRING
+    (typed leaves drop phone-part leading zeros and null whole rows on DIGen DQ values)."""
+    print("\nCustomerMgmt.xml explicit schema")
+    schema = _workflow_common.CUSTOMERMGMT_XML_SCHEMA
+    for rel in CUSTOMERMGMT_LOADERS:
+        txt = (ROOT / rel).read_text()
+        if "${customermgmt_xml_schema}" not in txt:
+            _fail(f"{rel}: does not read ${{customermgmt_xml_schema}}")
+    _ok(f"{len(CUSTOMERMGMT_LOADERS)} loaders read ${{customermgmt_xml_schema}}")
+
+    loader_names = tuple(Path(rel).stem for rel in CUSTOMERMGMT_LOADERS)
+    jobs = {
+        f"{builder.__name__.split('.')[-1]} {gen} SF={sf}": builder.build(**{
+            **_bench_args("j", "CLUSTER", "x", "x", gen), "scale_factor": sf})
+        for builder in (workflows_single_batch, workflows_incremental)
+        for gen, sf in (("spark", 10), ("digen", 1000))
+    }
+    jobs["sdp_workflow digen SF=1000"] = sdp_workflow.build(
+        job_name="j", catalog="main", wh_target="w", edition="CORE", datagen_label="x",
+        scale_factor=1000, repo_src_path=COMMON["repo_src_path"],
+        tpcdi_directory=COMMON["tpcdi_directory"], data_generator="digen", pipeline_id=1,
+        dbr=COMMON["dbr"], driver_node_type="n", worker_node_type="n")
+    for label, job in jobs.items():
+        loader_tasks = [t for t in _all_tasks(job)
+                        if t.get("notebook_task", {}).get("notebook_path", "").endswith(loader_names)]
+        if not loader_tasks:
+            _fail(f"{label}: no CustomerMgmt loader task found")
+        for t in loader_tasks:
+            if t["notebook_task"].get("base_parameters", {}).get("customermgmt_xml_schema") != schema:
+                _fail(f"{label}: {t['task_key']} does not pass CUSTOMERMGMT_XML_SCHEMA")
+    pipeline = sdp_pipeline.build(
+        job_name="p", catalog="main", wh_target="w", edition="CORE", datagen_label="x",
+        scale_factor=10, repo_src_path=COMMON["repo_src_path"],
+        tpcdi_directory=COMMON["tpcdi_directory"], serverless="YES", data_generator="spark")
+    if pipeline["configuration"].get("customermgmt_xml_schema") != schema:
+        _fail("sdp_pipeline: configuration lacks customermgmt_xml_schema")
+    _ok(f"passed by {len(jobs)} workflows + the SDP pipeline configuration")
+
+    leaf_types = re.findall(r"\w+\s*:?\s+(?!STRUCT\b)(\w+)", schema)
+    if not leaf_types or set(leaf_types) != {"STRING"}:
+        _fail(f"CustomerMgmt schema leaves must all be STRING, got {sorted(set(leaf_types))}")
+    _ok(f"{len(leaf_types)} leaves, all STRING")
+
+
 def main():
     tests = [
         test_datagen_spark,
@@ -654,6 +712,7 @@ def main():
         test_fabric_competitors_offered_on_azure_only,
         test_fabric_dw_jobs,
         test_fabric_spark_vs_nee_differ_only_by_toggle,
+        test_customermgmt_xml_schema,
     ]
     for t in tests:
         t()

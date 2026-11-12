@@ -58,7 +58,8 @@ CREATE OR REFRESH LIVE TABLE customermgmt PARTITIONED BY (ActionType) AS SELECT
 FROM read_files(
   "${files_directory}sf=${scale_factor}/Batch1",
   format => "xml",
-  inferSchema => False, 
   rowTag => "TPCDI:Action",
-  fileNamePattern => "{CustomerMgmt.xml,CustomerMgmt_[0-9]*.xml}"
+  fileNamePattern => "{CustomerMgmt.xml,CustomerMgmt_[0-9]*.xml}",
+  -- Explicit XML schema: CUSTOMERMGMT_XML_SCHEMA in tools/workflow_builders/_workflow_common.py (passed in by the workflow builders).
+  schema => '${customermgmt_xml_schema}'
 )

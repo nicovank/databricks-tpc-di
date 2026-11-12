@@ -4,6 +4,8 @@ Submitted to the `/api/2.0/pipelines` endpoint (not the Jobs API).
 """
 from __future__ import annotations
 
+from workflow_builders import _workflow_common as common
+
 
 # Bronze table descriptors used by the SDP bronze notebook. JSON-encoded as a single string and read back inside the notebook via json.loads. Identical to the value the Jinja template emitted; kept as one literal blob so future schema edits happen here in one place.
 _BRONZE_TABLES_JSON = (
@@ -143,6 +145,7 @@ def build(*, job_name: str, catalog: str, wh_target: str, edition: str,
         "FactWatches.schema": _FACT_WATCHES_SCHEMA,
         "DimAccountStg.schema": _DIM_ACCOUNT_STG_SCHEMA,
         "cust_mgmt_schema": cust_mgmt_schema,
+        "customermgmt_xml_schema": common.CUSTOMERMGMT_XML_SCHEMA,
     }
     if edition == "ADVANCED":
         configuration.update(_ADVANCED_CONSTRAINTS)

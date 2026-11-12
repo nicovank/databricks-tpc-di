@@ -7,6 +7,8 @@ ingests CustomerMgmt.xml using the legacy spark-xml Maven library.
 """
 from __future__ import annotations
 
+from workflow_builders import _workflow_common as common
+
 
 def _description(*, data_generator: str, edition: str, scale_factor: int,
                  catalog: str, wh_target: str, datagen_label: str,
@@ -100,6 +102,7 @@ def _digen_high_sf_tasks(*, job_name: str, repo_src_path: str,
             "run_if": "ALL_SUCCESS",
             "notebook_task": {
                 "notebook_path": f"{repo_src_path}/incremental_batches/bronze/CustomerMgmtRaw_mavenlib",
+                "base_parameters": {"customermgmt_xml_schema": common.CUSTOMERMGMT_XML_SCHEMA},
                 "source": "WORKSPACE",
             },
             "job_cluster_key": f"{job_name}_compute",

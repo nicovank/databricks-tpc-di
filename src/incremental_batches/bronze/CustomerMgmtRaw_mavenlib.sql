@@ -4,12 +4,14 @@ CREATE WIDGET DROPDOWN xml_lib DEFAULT "com.databricks.spark.xml" CHOICES SELECT
 CREATE WIDGET TEXT tpcdi_directory DEFAULT "/Volumes/tpcdi/tpcdi_raw_data/tpcdi_volume/";
 CREATE WIDGET TEXT wh_db DEFAULT '';
 CREATE WIDGET TEXT catalog DEFAULT 'tpcdi';
+CREATE WIDGET TEXT customermgmt_xml_schema DEFAULT '';
 
 -- COMMAND ----------
 
-CREATE OR REPLACE TEMPORARY VIEW v_cust_mgmt
+-- Explicit XML schema: CUSTOMERMGMT_XML_SCHEMA in tools/workflow_builders/_workflow_common.py (passed in by the workflow builders).
+CREATE OR REPLACE TEMPORARY VIEW v_cust_mgmt (${customermgmt_xml_schema})
 USING ${xml_lib}
-OPTIONS (path "${tpcdi_directory}sf=${scale_factor}/Batch1/{CustomerMgmt.xml,CustomerMgmt_[0-9]*.xml}", rowTag "TPCDI:Action", inferSchema "false");
+OPTIONS (path "${tpcdi_directory}sf=${scale_factor}/Batch1/{CustomerMgmt.xml,CustomerMgmt_[0-9]*.xml}", rowTag "TPCDI:Action");
 
 -- COMMAND ----------
 

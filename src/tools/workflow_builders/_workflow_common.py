@@ -181,6 +181,27 @@ def make_task(
     return task
 
 
+# Schema of CustomerMgmt.xml, passed to every CustomerMgmtRaw loader as ${customermgmt_xml_schema} (XML attributes carry a `_` prefix).
+# Leaves stay STRING on purpose: typed, phone parts lose leading zeros and DIGen DQ values (e.g. C_TIER="") null the whole row in the reader.
+CUSTOMERMGMT_XML_SCHEMA = " ".join("""
+    _ActionType STRING,
+    _ActionTS STRING,
+    Customer STRUCT<
+      _C_ID: STRING, _C_TAX_ID: STRING, _C_GNDR: STRING, _C_TIER: STRING, _C_DOB: STRING,
+      Name: STRUCT<C_L_NAME: STRING, C_F_NAME: STRING, C_M_NAME: STRING>,
+      Address: STRUCT<C_ADLINE1: STRING, C_ADLINE2: STRING, C_ZIPCODE: STRING, C_CITY: STRING, C_STATE_PROV: STRING, C_CTRY: STRING>,
+      ContactInfo: STRUCT<
+        C_PRIM_EMAIL: STRING, C_ALT_EMAIL: STRING,
+        C_PHONE_1: STRUCT<C_CTRY_CODE: STRING, C_AREA_CODE: STRING, C_LOCAL: STRING, C_EXT: STRING>,
+        C_PHONE_2: STRUCT<C_CTRY_CODE: STRING, C_AREA_CODE: STRING, C_LOCAL: STRING, C_EXT: STRING>,
+        C_PHONE_3: STRUCT<C_CTRY_CODE: STRING, C_AREA_CODE: STRING, C_LOCAL: STRING, C_EXT: STRING>
+      >,
+      TaxInfo: STRUCT<C_LCL_TX_ID: STRING, C_NAT_TX_ID: STRING>,
+      Account: STRUCT<_CA_ID: STRING, _CA_TAX_ST: STRING, CA_B_ID: STRING, CA_NAME: STRING>
+    >
+""".split())
+
+
 def make_customermgmt_task(
     *,
     repo_src_path: str,
@@ -205,7 +226,8 @@ def make_customermgmt_task(
             task_key="ingest_customermgmt",
             notebook_path=f"{repo_src_path}/incremental_batches/bronze/CustomerMgmtRaw_mavenlib",
             depends_on=depends_on,
-            base_params={"xml_lib": "com.databricks.spark.xml"},
+            base_params={"xml_lib": "com.databricks.spark.xml",
+                         "customermgmt_xml_schema": CUSTOMERMGMT_XML_SCHEMA},
             exec_type=exec_type,
             serverless=serverless,
             job_name=job_name,
@@ -217,7 +239,7 @@ def make_customermgmt_task(
         task_key="ingest_customermgmt",
         notebook_path=modern_notebook_path,
         depends_on=depends_on,
-        base_params={"xml_lib": "xml"},
+        base_params={"xml_lib": "xml", "customermgmt_xml_schema": CUSTOMERMGMT_XML_SCHEMA},
         exec_type=exec_type,
         serverless=serverless,
         job_name=job_name,

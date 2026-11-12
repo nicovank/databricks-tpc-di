@@ -623,6 +623,18 @@ This is non-negotiable BEFORE triggering any job. Workspace repo id
   driver, the job is flagged for big-driver promotion forever; the
   scheduler will queue runs until a big driver is available (sometimes
   4-5 min wait). Cloning to a fresh job_id resets the flag.
+- **CustomerMgmt.xml is read with an explicit, STRING-only schema.** It is
+  defined once, as `CUSTOMERMGMT_XML_SCHEMA` in
+  `workflow_builders/_workflow_common.py`, and the builders pass it to every
+  CustomerMgmt loader as `${customermgmt_xml_schema}` (task base_parameter,
+  or SDP pipeline configuration key). Jobs and pipelines created before this
+  change don't pass it and fail once their Git folder is pulled — regenerate
+  them from the Driver. Running a loader by hand needs that widget set.
+  Don't type the leaves: typed inference reads phone `C_EXT`/`C_AREA_CODE` as
+  bigint (drops leading zeros), and DIGen DQ values such as `C_TIER=""` would
+  null the whole row in the reader instead of reaching the projection's
+  `try_cast`. One schema fits both generators (DIGen omits unchanged UPDCUST
+  fields, Spark emits them empty).
 - **Avoid manual `F.broadcast()` hints.** They override the optimizer's
   decision based on runtime stats, sometimes forcing 2 GiB Photon hash
   tables. Trust the 250MB `autoBroadcastJoinThreshold`.
@@ -644,7 +656,7 @@ src/
     cleanup_after_benchmark.sql   # final cleanup task (SQL — runs on warehouse too)
     regenerate_audits.py          # standalone audit recompute notebook
     workflow_builders/
-      _workflow_common.py         # shared helpers (make_task, make_cleanup_tasks, …)
+      _workflow_common.py         # shared helpers (make_task, make_cleanup_tasks, …) + CUSTOMERMGMT_XML_SCHEMA
       _node_picker.py             # cloud-aware ARM-preferred node selection
       datagen_spark.py            # Spark datagen workflow JSON
       datagen_digen.py            # DIGen.jar datagen workflow JSON
